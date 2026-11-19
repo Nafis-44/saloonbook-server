@@ -1186,6 +1186,91 @@ app.get("/appointments", async (req, res) => {
 });
 
 
+
+// ========================================
+// CUSTOMER APPOINTMENTS API
+// ========================================
+
+// Get Appointments of a Specific Customer
+app.get("/customer/appointments/:customerId", async (req, res) => {
+    try {
+        const { customerId } = req.params;
+
+        // Validate Customer ID
+        if (!ObjectId.isValid(customerId)) {
+            return res.status(400).json({
+                message: "Invalid customer ID.",
+            });
+        }
+
+        // Find Appointments of This Customer
+        const customerAppointments = await appointments
+            .aggregate([
+                {
+                    $match: {
+                        customerId: new ObjectId(customerId),
+                    },
+                },
+
+                // Get Service Information
+                {
+                    $lookup: {
+                        from: "services",
+                        localField: "serviceId",
+                        foreignField: "_id",
+                        as: "service",
+                    },
+                },
+                {
+                    $unwind: {
+                        path: "$service",
+                        preserveNullAndEmptyArrays: true,
+                    },
+                },
+
+                // Show Latest Appointments First
+                {
+                    $sort: {
+                        createdAt: -1,
+                    },
+                },
+            ])
+            .toArray();
+
+        // Calculate Appointment Statistics
+        const totalAppointments = customerAppointments.length;
+
+        const pendingAppointments = customerAppointments.filter(
+            (appointment) => appointment.status === "pending"
+        ).length;
+
+        const confirmedAppointments = customerAppointments.filter(
+            (appointment) => appointment.status === "confirmed"
+        ).length;
+
+        const cancelledAppointments = customerAppointments.filter(
+            (appointment) => appointment.status === "cancelled"
+        ).length;
+
+        // Send Response
+        res.status(200).json({
+            totalAppointments,
+            pendingAppointments,
+            confirmedAppointments,
+            cancelledAppointments,
+            appointments: customerAppointments,
+        });
+
+    } catch (error) {
+        console.error("Get Customer Appointments Error:", error);
+
+        res.status(500).json({
+            message: "Failed to fetch customer appointments.",
+        });
+    }
+});
+
+
 // Update Appointment Status
 app.patch("/appointments/:id/status", async (req, res) => {
     try {
