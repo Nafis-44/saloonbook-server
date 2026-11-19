@@ -977,11 +977,13 @@ app.delete("/services/:id", async (req, res) => {
 // APPOINTMENT APIs
 // ========================================
 
+
 // Create New Appointment
 app.post("/appointments", async (req, res) => {
     try {
         const {
             serviceId,
+            customerId,
             appointmentDate,
             timeSlot,
             message,
@@ -990,7 +992,7 @@ app.post("/appointments", async (req, res) => {
         // Required Field Validation
         if (!serviceId || !appointmentDate || !timeSlot) {
             return res.status(400).json({
-                message: "Please provide service, date and time.",
+                message: "Service, date and time slot are required.",
             });
         }
 
@@ -1001,15 +1003,24 @@ app.post("/appointments", async (req, res) => {
             });
         }
 
-        // Validate Date Format
+        // Validate Customer ID
+        if (customerId && !ObjectId.isValid(customerId)) {
+            return res.status(400).json({
+                message: "Invalid customer ID.",
+            });
+        }
+
+        // Validate Appointment Date Format
         if (!/^\d{4}-\d{2}-\d{2}$/.test(appointmentDate)) {
             return res.status(400).json({
                 message: "Invalid appointment date.",
             });
         }
 
-        // Check Real Calendar Date
-        const [year, month, day] = appointmentDate.split("-").map(Number);
+        // Validate Actual Calendar Date
+        const [year, month, day] = appointmentDate
+            .split("-")
+            .map(Number);
 
         const selectedDate = new Date(year, month - 1, day);
 
@@ -1023,30 +1034,27 @@ app.post("/appointments", async (req, res) => {
             });
         }
 
-        // Check Past Date
+        // Prevent Past Date
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
         if (selectedDate < today) {
             return res.status(400).json({
-                message: "You cannot book an appointment in the past.",
+                message: "You cannot book an appointment for a past date.",
             });
         }
 
         // Validate Time Slot
         if (!timeSlots.includes(timeSlot)) {
             return res.status(400).json({
-                message: "Invalid appointment time slot.",
+                message: "Invalid time slot.",
             });
         }
 
         // Validate Message
-        if (
-            message !== undefined &&
-            (typeof message !== "string" || message.length > 500)
-        ) {
+        if (message && message.length > 500) {
             return res.status(400).json({
-                message: "Message must be a string of maximum 500 characters.",
+                message: "Message cannot exceed 500 characters.",
             });
         }
 
@@ -1068,7 +1076,7 @@ app.post("/appointments", async (req, res) => {
             });
         }
 
-        // Check Duplicate Active Appointment
+        // Check Existing Appointment
         const existingAppointment = await appointments.findOne({
             appointmentDate,
             timeSlot,
@@ -1079,7 +1087,7 @@ app.post("/appointments", async (req, res) => {
 
         if (existingAppointment) {
             return res.status(409).json({
-                message: "This time slot is already booked. Please choose another time.",
+                message: "This time slot is already booked.",
             });
         }
 
@@ -1087,26 +1095,26 @@ app.post("/appointments", async (req, res) => {
         const newAppointment = {
             serviceId: new ObjectId(serviceId),
 
-            // Temporary until Authentication is implemented
-            customerId: null,
+            // Temporary customer linking
+            customerId: customerId
+                ? new ObjectId(customerId)
+                : null,
 
             appointmentDate,
             timeSlot,
             message: message?.trim() || "",
-
             servicePrice: service.price,
-
             paymentStatus: "unpaid",
             status: "pending",
-
             createdAt: new Date(),
         };
 
         const result = await appointments.insertOne(newAppointment);
 
         res.status(201).json({
-            message: "Appointment request submitted successfully!",
-            appointmentId: result.insertedId,
+            success: true,
+            message: "Appointment created successfully!",
+            insertedId: result.insertedId,
         });
 
     } catch (error) {
@@ -1118,11 +1126,14 @@ app.post("/appointments", async (req, res) => {
     }
 });
 
+
+
 // Get All Appointments (Temporary Development Route)
 app.get("/appointments", async (req, res) => {
     try {
         const result = await appointments
             .aggregate([
+                // Get Service Information
                 {
                     $lookup: {
                         from: "services",
@@ -1137,6 +1148,24 @@ app.get("/appointments", async (req, res) => {
                         preserveNullAndEmptyArrays: true,
                     },
                 },
+
+                // Get Customer Information
+                {
+                    $lookup: {
+                        from: "user",
+                        localField: "customerId",
+                        foreignField: "_id",
+                        as: "customer",
+                    },
+                },
+                {
+                    $unwind: {
+                        path: "$customer",
+                        preserveNullAndEmptyArrays: true,
+                    },
+                },
+
+                // Sort Latest Appointments First
                 {
                     $sort: {
                         createdAt: -1,
@@ -1155,6 +1184,7 @@ app.get("/appointments", async (req, res) => {
         });
     }
 });
+
 
 // Update Appointment Status
 app.patch("/appointments/:id/status", async (req, res) => {
