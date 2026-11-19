@@ -445,8 +445,148 @@
 
 
 
+// import express from "express";
+// import { MongoClient } from "mongodb";
+// import "dotenv/config";
+// import cors from "cors";
+
+// const app = express();
+
+// app.use(express.json());
+// app.use(cors());
+
+// const port = 5000;
+
+// const client = new MongoClient(process.env.MONGODB_URI);
+
+// async function connectToMongoDB() {
+//     try {
+//         await client.connect();
+
+//         console.log("You successfully connected to MongoDB!");
+
+//         return client;
+//     } catch (error) {
+//         console.error("MongoDB Connection Error:", error);
+//         process.exit(1);
+//     }
+// }
+
+// const mongoclient = await connectToMongoDB();
+
+// const db = mongoclient.db("saloonbook");
+
+// // Collections
+// const users = db.collection("user");
+// const services = db.collection("services");
+
+// // Home Route
+// app.get("/", (req, res) => {
+//     res.send("SalonBook Server is Running!");
+// });
+
+// // Get All Users
+// app.get("/users", async (req, res) => {
+//     try {
+//         const result = await users.find({}).toArray();
+
+//         res.status(200).json(result);
+//     } catch (error) {
+//         console.error("Get Users Error:", error);
+
+//         res.status(500).json({
+//             message: "Failed to get users",
+//         });
+//     }
+// });
+
+// // Get All Services
+// app.get("/services", async (req, res) => {
+//     try {
+//         const result = await services.find({}).toArray();
+
+//         res.status(200).json(result);
+//     } catch (error) {
+//         console.error("Get Services Error:", error);
+
+//         res.status(500).json({
+//             message: "Failed to get services",
+//         });
+//     }
+// });
+
+// // Add New Service
+// app.post("/services", async (req, res) => {
+//     try {
+//         const {
+//             name,
+//             description,
+//             category,
+//             price,
+//             duration,
+//             image,
+//         } = req.body;
+
+//         // Validate Required Fields
+//         if (
+//             !name ||
+//             !description ||
+//             !category ||
+//             price === undefined ||
+//             duration === undefined
+//         ) {
+//             return res.status(400).json({
+//                 message: "Please provide all required service information.",
+//             });
+//         }
+
+//         const newService = {
+//             name,
+//             description,
+//             category,
+//             price: Number(price),
+//             duration: Number(duration),
+//             image: image || "",
+//             createdAt: new Date(),
+//             updatedAt: new Date(),
+//         };
+
+//         const result = await services.insertOne(newService);
+
+//         res.status(201).json({
+//             message: "Service added successfully!",
+//             insertedId: result.insertedId,
+//         });
+
+//     } catch (error) {
+//         console.error("Add Service Error:", error);
+
+//         res.status(500).json({
+//             message: "Failed to add service.",
+//         });
+//     }
+// });
+
+// // Start Server
+// app.listen(port, () => {
+//     console.log(`SalonBook server listening on port ${port}`);
+// });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 import express from "express";
-import { MongoClient } from "mongodb";
+import { MongoClient, ObjectId } from "mongodb";
 import "dotenv/config";
 import cors from "cors";
 
@@ -527,10 +667,9 @@ app.post("/services", async (req, res) => {
             image,
         } = req.body;
 
-        // Validate Required Fields
         if (
-            !name ||
-            !description ||
+            !name?.trim() ||
+            !description?.trim() ||
             !category ||
             price === undefined ||
             duration === undefined
@@ -541,8 +680,8 @@ app.post("/services", async (req, res) => {
         }
 
         const newService = {
-            name,
-            description,
+            name: name.trim(),
+            description: description.trim(),
             category,
             price: Number(price),
             duration: Number(duration),
@@ -550,6 +689,17 @@ app.post("/services", async (req, res) => {
             createdAt: new Date(),
             updatedAt: new Date(),
         };
+
+        if (
+            !Number.isFinite(newService.price) ||
+            newService.price < 0 ||
+            !Number.isInteger(newService.duration) ||
+            newService.duration <= 0
+        ) {
+            return res.status(400).json({
+                message: "Please provide a valid price and duration.",
+            });
+        }
 
         const result = await services.insertOne(newService);
 
@@ -563,6 +713,94 @@ app.post("/services", async (req, res) => {
 
         res.status(500).json({
             message: "Failed to add service.",
+        });
+    }
+});
+
+// Update Service
+app.put("/services/:id", async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const {
+            name,
+            description,
+            category,
+            price,
+            duration,
+            image,
+        } = req.body;
+
+        // Check MongoDB ID
+        if (!ObjectId.isValid(id)) {
+            return res.status(400).json({
+                message: "Invalid service ID.",
+            });
+        }
+
+        // Validate Required Fields
+        if (
+            !name?.trim() ||
+            !description?.trim() ||
+            !category ||
+            price === undefined ||
+            duration === undefined
+        ) {
+            return res.status(400).json({
+                message: "Please provide all required service information.",
+            });
+        }
+
+        const updatedPrice = Number(price);
+        const updatedDuration = Number(duration);
+
+        if (
+            !Number.isFinite(updatedPrice) ||
+            updatedPrice < 0 ||
+            !Number.isInteger(updatedDuration) ||
+            updatedDuration <= 0
+        ) {
+            return res.status(400).json({
+                message: "Please provide a valid price and duration.",
+            });
+        }
+
+        // Prepare Updated Data
+        const updatedService = {
+            name: name.trim(),
+            description: description.trim(),
+            category,
+            price: updatedPrice,
+            duration: updatedDuration,
+            updatedAt: new Date(),
+        };
+
+        // Keep Previous Image if No New Image is Provided
+        if (image !== undefined) {
+            updatedService.image = image;
+        }
+
+        // Update Service in MongoDB
+        const result = await services.updateOne(
+            { _id: new ObjectId(id) },
+            { $set: updatedService }
+        );
+
+        if (result.matchedCount === 0) {
+            return res.status(404).json({
+                message: "Service not found.",
+            });
+        }
+
+        res.status(200).json({
+            message: "Service updated successfully!",
+        });
+
+    } catch (error) {
+        console.error("Update Service Error:", error);
+
+        res.status(500).json({
+            message: "Failed to update service.",
         });
     }
 });
