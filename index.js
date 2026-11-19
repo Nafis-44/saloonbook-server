@@ -439,8 +439,6 @@
 
 
 
-
-
 import express from "express";
 import { MongoClient, ObjectId } from "mongodb";
 import "dotenv/config";
@@ -508,8 +506,6 @@ app.get("/users", async (req, res) => {
     }
 });
 
-
-
 // Get All Customers (Admin)
 app.get("/admin/users", async (req, res) => {
     try {
@@ -528,7 +524,6 @@ app.get("/admin/users", async (req, res) => {
         });
     }
 });
-
 
 // Block / Unblock Customer
 app.patch("/admin/users/:id/status", async (req, res) => {
@@ -595,6 +590,121 @@ app.patch("/admin/users/:id/status", async (req, res) => {
     }
 });
 
+// ========================================
+// ADMIN DASHBOARD STATISTICS API
+// ========================================
+
+app.get("/admin/dashboard/stats", async (req, res) => {
+    try {
+        // Total Services
+        const totalServices = await services.countDocuments({});
+
+        // Active Services
+        const activeServices = await services.countDocuments({
+            $or: [
+                { status: "active" },
+                { status: { $exists: false } },
+            ],
+        });
+
+        // Total Customers (Exclude Admin)
+        const totalCustomers = await users.countDocuments({
+            role: { $ne: "admin" },
+        });
+
+        // Total Appointments
+        const totalAppointments = await appointments.countDocuments({});
+
+        // Pending Appointments
+        const pendingAppointments = await appointments.countDocuments({
+            status: "pending",
+        });
+
+        // Confirmed Appointments
+        const confirmedAppointments = await appointments.countDocuments({
+            status: "confirmed",
+        });
+
+        // Recent Appointments
+        const recentAppointments = await appointments.aggregate([
+            {
+                $sort: {
+                    createdAt: -1,
+                },
+            },
+            {
+                $limit: 5,
+            },
+            {
+                $lookup: {
+                    from: "services",
+                    localField: "serviceId",
+                    foreignField: "_id",
+                    as: "service",
+                },
+            },
+            {
+                $unwind: {
+                    path: "$service",
+                    preserveNullAndEmptyArrays: true,
+                },
+            },
+            {
+                $lookup: {
+                    from: "user",
+                    localField: "customerId",
+                    foreignField: "_id",
+                    as: "customer",
+                },
+            },
+            {
+                $unwind: {
+                    path: "$customer",
+                    preserveNullAndEmptyArrays: true,
+                },
+            },
+            {
+                $project: {
+                    _id: 1,
+                    appointmentDate: 1,
+                    timeSlot: 1,
+                    status: 1,
+                    paymentStatus: 1,
+                    servicePrice: 1,
+                    createdAt: 1,
+                    serviceName: "$service.name",
+                    customerName: "$customer.name",
+                    customerEmail: "$customer.email",
+                },
+            },
+        ]).toArray();
+
+        res.status(200).json({
+            totalServices,
+            activeServices,
+            totalCustomers,
+            totalAppointments,
+            pendingAppointments,
+            confirmedAppointments,
+
+            // Stripe integration is not completed yet
+            totalRevenue: 0,
+
+            recentAppointments,
+        });
+
+    } catch (error) {
+        console.error("Admin Dashboard Statistics Error:", error);
+
+        res.status(500).json({
+            message: "Failed to fetch dashboard statistics.",
+        });
+    }
+});
+
+// ========================================
+// SERVICE APIs
+// ========================================
 
 // Get All Services (Admin)
 app.get("/services", async (req, res) => {
@@ -1046,9 +1156,6 @@ app.get("/appointments", async (req, res) => {
     }
 });
 
-
-
-
 // Update Appointment Status
 app.patch("/appointments/:id/status", async (req, res) => {
     try {
@@ -1113,8 +1220,6 @@ app.patch("/appointments/:id/status", async (req, res) => {
         });
     }
 });
-
-
 
 // Start Server
 app.listen(port, () => {
