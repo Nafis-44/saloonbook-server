@@ -577,14 +577,6 @@
 
 
 
-
-
-
-
-
-
-
-
 import express from "express";
 import { MongoClient, ObjectId } from "mongodb";
 import "dotenv/config";
@@ -731,14 +723,12 @@ app.put("/services/:id", async (req, res) => {
             image,
         } = req.body;
 
-        // Check MongoDB ID
         if (!ObjectId.isValid(id)) {
             return res.status(400).json({
                 message: "Invalid service ID.",
             });
         }
 
-        // Validate Required Fields
         if (
             !name?.trim() ||
             !description?.trim() ||
@@ -765,7 +755,6 @@ app.put("/services/:id", async (req, res) => {
             });
         }
 
-        // Prepare Updated Data
         const updatedService = {
             name: name.trim(),
             description: description.trim(),
@@ -775,12 +764,10 @@ app.put("/services/:id", async (req, res) => {
             updatedAt: new Date(),
         };
 
-        // Keep Previous Image if No New Image is Provided
         if (image !== undefined) {
             updatedService.image = image;
         }
 
-        // Update Service in MongoDB
         const result = await services.updateOne(
             { _id: new ObjectId(id) },
             { $set: updatedService }
@@ -801,6 +788,44 @@ app.put("/services/:id", async (req, res) => {
 
         res.status(500).json({
             message: "Failed to update service.",
+        });
+    }
+});
+
+// Delete Service
+app.delete("/services/:id", async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Step 1: Validate MongoDB ID
+        if (!ObjectId.isValid(id)) {
+            return res.status(400).json({
+                message: "Invalid service ID.",
+            });
+        }
+
+        // Step 2: Delete Service from MongoDB
+        const result = await services.deleteOne({
+            _id: new ObjectId(id),
+        });
+
+        // Step 3: Check if Service Exists
+        if (result.deletedCount === 0) {
+            return res.status(404).json({
+                message: "Service not found.",
+            });
+        }
+
+        // Step 4: Send Success Response
+        res.status(200).json({
+            message: "Service deleted successfully!",
+        });
+
+    } catch (error) {
+        console.error("Delete Service Error:", error);
+
+        res.status(500).json({
+            message: "Failed to delete service.",
         });
     }
 });
