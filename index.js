@@ -1,0 +1,573 @@
+// import express from 'express'
+// import { MongoClient } from 'mongodb'
+// import 'dotenv/config'
+// import cors from 'cors'
+
+// const app = express()
+// app.use(express.json())
+// app.use(cors())
+// const port = 5000
+
+// const client = new MongoClient(process.env.MONGODB_URI)
+
+// export async function connectToMongoDB() {
+//     try {
+//         await client.connect();
+//         console.log("You successfully connected to MongoDB!");
+//         return client;
+//     } catch (err) {
+//         console.dir(err);
+//     }
+// }
+// const mongoclient = await connectToMongoDB();
+// const db = mongoclient.db("saloonbook")
+
+
+
+// app.get('/', (req, res) => {
+//     res.send('Hello World!')
+// })
+
+// app.listen(port, () => {
+//     console.log(`Example app listening on port ${port}`)
+// })
+
+
+
+
+
+
+
+
+
+
+
+// import express from 'express'
+// import { MongoClient } from 'mongodb'
+// import 'dotenv/config'
+// import cors from 'cors'
+
+// const app = express()
+// app.use(express.json())
+// app.use(cors())
+// const port = 5000
+
+// const client = new MongoClient(process.env.MONGODB_URI)
+
+// export async function connectToMongoDB() {
+//     try {
+//         await client.connect();
+//         console.log("You successfully connected to MongoDB!");
+//         return client;
+//     } catch (err) {
+//         console.dir(err);
+//     }
+// }
+
+// const mongoclient = await connectToMongoDB();
+// const db = mongoclient.db("saloonbook")
+
+// // Collections
+// const users = db.collection("user")
+
+// // Get all users
+// app.get("/users", async (req, res) => {
+//     try {
+//         const cursor = users.find({});
+//         const result = await cursor.toArray();
+//         res.send(result);
+//     } catch (error) {
+//         res.status(500).send({ message: "Failed to get users" });
+//     }
+// })
+
+// app.get('/', (req, res) => {
+//     res.send('Hello World!')
+// })
+
+// app.listen(port, () => {
+//     console.log(`Example app listening on port ${port}`)
+// })
+
+
+
+
+
+
+
+
+
+
+// import express from 'express';
+// import { MongoClient, ObjectId } from 'mongodb';
+// import 'dotenv/config';
+// import cors from 'cors';
+
+// const app = express();
+
+// app.use(express.json());
+// app.use(cors());
+
+// const port = 5000;
+
+// // MongoDB Connection
+// const client = new MongoClient(process.env.MONGODB_URI);
+
+// export async function connectToMongoDB() {
+//     try {
+//         await client.connect();
+
+//         console.log("You successfully connected to MongoDB!");
+
+//         return client;
+//     } catch (error) {
+//         console.error("MongoDB Connection Failed:", error);
+//         throw error;
+//     }
+// }
+
+// // Connect to Database
+// const mongoclient = await connectToMongoDB();
+
+// const db = mongoclient.db("saloonbook");
+
+// // Collections
+// const users = db.collection("user");
+// const services = db.collection("services");
+
+
+// // ======================================
+// // HOME ROUTE
+// // ======================================
+
+// app.get('/', (req, res) => {
+//     res.send('SalonBook Server Is Running!');
+// });
+
+
+// // ======================================
+// // USER ROUTES
+// // ======================================
+
+// // Get All Users
+// app.get("/users", async (req, res) => {
+//     try {
+//         const result = await users.find({}).toArray();
+
+//         res.status(200).send(result);
+
+//     } catch (error) {
+//         console.error("Get Users Error:", error);
+
+//         res.status(500).send({
+//             message: "Failed to get users"
+//         });
+//     }
+// });
+
+
+// // ======================================
+// // SERVICE ROUTES
+// // ======================================
+
+
+// // 1. GET ALL SERVICES
+// app.get("/services", async (req, res) => {
+//     try {
+//         const result = await services
+//             .find({})
+//             .sort({ createdAt: -1 })
+//             .toArray();
+
+//         res.status(200).send(result);
+
+//     } catch (error) {
+//         console.error("Get Services Error:", error);
+
+//         res.status(500).send({
+//             message: "Failed to get services"
+//         });
+//     }
+// });
+
+
+// // 2. GET SINGLE SERVICE
+// app.get("/services/:id", async (req, res) => {
+//     try {
+//         const { id } = req.params;
+
+//         if (!ObjectId.isValid(id)) {
+//             return res.status(400).send({
+//                 message: "Invalid service ID"
+//             });
+//         }
+
+//         const result = await services.findOne({
+//             _id: new ObjectId(id)
+//         });
+
+//         if (!result) {
+//             return res.status(404).send({
+//                 message: "Service not found"
+//             });
+//         }
+
+//         res.status(200).send(result);
+
+//     } catch (error) {
+//         console.error("Get Single Service Error:", error);
+
+//         res.status(500).send({
+//             message: "Failed to get service"
+//         });
+//     }
+// });
+
+
+// // 3. ADD NEW SERVICE
+// app.post("/services", async (req, res) => {
+//     try {
+//         const {
+//             name,
+//             description,
+//             price,
+//             duration,
+//             category,
+//             image
+//         } = req.body;
+
+//         // Required Field Validation
+//         if (
+//             !name?.trim() ||
+//             !description?.trim() ||
+//             price === undefined ||
+//             duration === undefined ||
+//             !category?.trim()
+//         ) {
+//             return res.status(400).send({
+//                 message: "Please provide all required service information"
+//             });
+//         }
+
+//         const numericPrice = Number(price);
+//         const numericDuration = Number(duration);
+
+//         if (
+//             !Number.isFinite(numericPrice) ||
+//             numericPrice < 0
+//         ) {
+//             return res.status(400).send({
+//                 message: "Please provide a valid service price"
+//             });
+//         }
+
+//         if (
+//             !Number.isInteger(numericDuration) ||
+//             numericDuration <= 0
+//         ) {
+//             return res.status(400).send({
+//                 message: "Please provide a valid service duration"
+//             });
+//         }
+
+//         const newService = {
+//             name: name.trim(),
+//             description: description.trim(),
+//             price: numericPrice,
+//             duration: numericDuration,
+//             category: category.trim(),
+//             image: typeof image === "string" ? image.trim() : "",
+//             createdAt: new Date(),
+//             updatedAt: new Date()
+//         };
+
+//         const result = await services.insertOne(newService);
+
+//         res.status(201).send({
+//             success: true,
+//             message: "Service added successfully",
+//             insertedId: result.insertedId
+//         });
+
+//     } catch (error) {
+//         console.error("Add Service Error:", error);
+
+//         res.status(500).send({
+//             message: "Failed to add service"
+//         });
+//     }
+// });
+
+
+// // 4. UPDATE SERVICE
+// app.put("/services/:id", async (req, res) => {
+//     try {
+//         const { id } = req.params;
+
+//         if (!ObjectId.isValid(id)) {
+//             return res.status(400).send({
+//                 message: "Invalid service ID"
+//             });
+//         }
+
+//         const {
+//             name,
+//             description,
+//             price,
+//             duration,
+//             category,
+//             image
+//         } = req.body;
+
+//         if (
+//             !name?.trim() ||
+//             !description?.trim() ||
+//             price === undefined ||
+//             duration === undefined ||
+//             !category?.trim()
+//         ) {
+//             return res.status(400).send({
+//                 message: "Please provide all required service information"
+//             });
+//         }
+
+//         const numericPrice = Number(price);
+//         const numericDuration = Number(duration);
+
+//         if (
+//             !Number.isFinite(numericPrice) ||
+//             numericPrice < 0 ||
+//             !Number.isInteger(numericDuration) ||
+//             numericDuration <= 0
+//         ) {
+//             return res.status(400).send({
+//                 message: "Invalid price or duration"
+//             });
+//         }
+
+//         const updatedService = {
+//             name: name.trim(),
+//             description: description.trim(),
+//             price: numericPrice,
+//             duration: numericDuration,
+//             category: category.trim(),
+//             image: typeof image === "string" ? image.trim() : "",
+//             updatedAt: new Date()
+//         };
+
+//         const result = await services.updateOne(
+//             { _id: new ObjectId(id) },
+//             { $set: updatedService }
+//         );
+
+//         if (result.matchedCount === 0) {
+//             return res.status(404).send({
+//                 message: "Service not found"
+//             });
+//         }
+
+//         const updatedData = await services.findOne({
+//             _id: new ObjectId(id)
+//         });
+
+//         res.status(200).send({
+//             success: true,
+//             message: "Service updated successfully",
+//             service: updatedData
+//         });
+
+//     } catch (error) {
+//         console.error("Update Service Error:", error);
+
+//         res.status(500).send({
+//             message: "Failed to update service"
+//         });
+//     }
+// });
+
+
+// // 5. DELETE SERVICE
+// app.delete("/services/:id", async (req, res) => {
+//     try {
+//         const { id } = req.params;
+
+//         if (!ObjectId.isValid(id)) {
+//             return res.status(400).send({
+//                 message: "Invalid service ID"
+//             });
+//         }
+
+//         const result = await services.deleteOne({
+//             _id: new ObjectId(id)
+//         });
+
+//         if (result.deletedCount === 0) {
+//             return res.status(404).send({
+//                 message: "Service not found"
+//             });
+//         }
+
+//         res.status(200).send({
+//             success: true,
+//             message: "Service deleted successfully"
+//         });
+
+//     } catch (error) {
+//         console.error("Delete Service Error:", error);
+
+//         res.status(500).send({
+//             message: "Failed to delete service"
+//         });
+//     }
+// });
+
+
+// // ======================================
+// // START SERVER
+// // ======================================
+
+// app.listen(port, () => {
+//     console.log(`SalonBook Server listening on port ${port}`);
+// });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+import express from "express";
+import { MongoClient } from "mongodb";
+import "dotenv/config";
+import cors from "cors";
+
+const app = express();
+
+app.use(express.json());
+app.use(cors());
+
+const port = 5000;
+
+const client = new MongoClient(process.env.MONGODB_URI);
+
+async function connectToMongoDB() {
+    try {
+        await client.connect();
+
+        console.log("You successfully connected to MongoDB!");
+
+        return client;
+    } catch (error) {
+        console.error("MongoDB Connection Error:", error);
+        process.exit(1);
+    }
+}
+
+const mongoclient = await connectToMongoDB();
+
+const db = mongoclient.db("saloonbook");
+
+// Collections
+const users = db.collection("user");
+const services = db.collection("services");
+
+// Home Route
+app.get("/", (req, res) => {
+    res.send("SalonBook Server is Running!");
+});
+
+// Get All Users
+app.get("/users", async (req, res) => {
+    try {
+        const result = await users.find({}).toArray();
+
+        res.status(200).json(result);
+    } catch (error) {
+        console.error("Get Users Error:", error);
+
+        res.status(500).json({
+            message: "Failed to get users",
+        });
+    }
+});
+
+// Get All Services
+app.get("/services", async (req, res) => {
+    try {
+        const result = await services.find({}).toArray();
+
+        res.status(200).json(result);
+    } catch (error) {
+        console.error("Get Services Error:", error);
+
+        res.status(500).json({
+            message: "Failed to get services",
+        });
+    }
+});
+
+// Add New Service
+app.post("/services", async (req, res) => {
+    try {
+        const {
+            name,
+            description,
+            category,
+            price,
+            duration,
+            image,
+        } = req.body;
+
+        // Validate Required Fields
+        if (
+            !name ||
+            !description ||
+            !category ||
+            price === undefined ||
+            duration === undefined
+        ) {
+            return res.status(400).json({
+                message: "Please provide all required service information.",
+            });
+        }
+
+        const newService = {
+            name,
+            description,
+            category,
+            price: Number(price),
+            duration: Number(duration),
+            image: image || "",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        };
+
+        const result = await services.insertOne(newService);
+
+        res.status(201).json({
+            message: "Service added successfully!",
+            insertedId: result.insertedId,
+        });
+
+    } catch (error) {
+        console.error("Add Service Error:", error);
+
+        res.status(500).json({
+            message: "Failed to add service.",
+        });
+    }
+});
+
+// Start Server
+app.listen(port, () => {
+    console.log(`SalonBook server listening on port ${port}`);
+});
