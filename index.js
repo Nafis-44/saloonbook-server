@@ -441,9 +441,6 @@
 
 
 
-
-
-
 import express from "express";
 import { MongoClient, ObjectId } from "mongodb";
 import "dotenv/config";
@@ -478,6 +475,18 @@ const db = mongoclient.db("saloonbook");
 // Collections
 const users = db.collection("user");
 const services = db.collection("services");
+const appointments = db.collection("appointments");
+
+// Available Time Slots
+const timeSlots = [
+    "09:00 AM",
+    "10:30 AM",
+    "12:00 PM",
+    "01:30 PM",
+    "03:00 PM",
+    "04:30 PM",
+    "06:00 PM",
+];
 
 // Home Route
 app.get("/", (req, res) => {
@@ -606,6 +615,38 @@ app.post("/services", async (req, res) => {
     }
 });
 
+// Get Single Service by ID
+app.get("/services/:id", async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        if (!ObjectId.isValid(id)) {
+            return res.status(400).json({
+                message: "Invalid service ID.",
+            });
+        }
+
+        const result = await services.findOne({
+            _id: new ObjectId(id),
+        });
+
+        if (!result) {
+            return res.status(404).json({
+                message: "Service not found.",
+            });
+        }
+
+        res.status(200).json(result);
+
+    } catch (error) {
+        console.error("Get Single Service Error:", error);
+
+        res.status(500).json({
+            message: "Failed to get service details.",
+        });
+    }
+});
+
 // Update Service
 app.put("/services/:id", async (req, res) => {
     try {
@@ -730,6 +771,189 @@ app.delete("/services/:id", async (req, res) => {
 
         res.status(500).json({
             message: "Failed to delete service.",
+        });
+    }
+});
+
+// ========================================
+// APPOINTMENT APIs
+// ========================================
+
+// Create New Appointment
+app.post("/appointments", async (req, res) => {
+    try {
+        const {
+            serviceId,
+            appointmentDate,
+            timeSlot,
+            message,
+        } = req.body;
+
+        // Required Field Validation
+        if (!serviceId || !appointmentDate || !timeSlot) {
+            return res.status(400).json({
+                message: "Please provide service, date and time.",
+            });
+        }
+
+        // Validate Service ID
+        if (!ObjectId.isValid(serviceId)) {
+            return res.status(400).json({
+                message: "Invalid service ID.",
+            });
+        }
+
+        // Validate Date Format
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(appointmentDate)) {
+            return res.status(400).json({
+                message: "Invalid appointment date.",
+            });
+        }
+
+      // Check Real Calendar Date
+const [year, month, day] = appointmentDate.split("-").map(Number);
+
+const selectedDate = new Date(year, month - 1, day);
+
+if (
+    selectedDate.getFullYear() !== year ||
+    selectedDate.getMonth() !== month - 1 ||
+    selectedDate.getDate() !== day
+) {
+    return res.status(400).json({
+        message: "Invalid calendar date.",
+    });
+}
+
+// Check Past Date
+const today = new Date();
+today.setHours(0, 0, 0, 0);
+
+if (selectedDate < today) {
+    return res.status(400).json({
+        message: "You cannot book an appointment in the past.",
+    });
+}
+
+        // Validate Time Slot
+        if (!timeSlots.includes(timeSlot)) {
+            return res.status(400).json({
+                message: "Invalid appointment time slot.",
+            });
+        }
+
+        // Validate Message
+        if (
+            message !== undefined &&
+            (typeof message !== "string" || message.length > 500)
+        ) {
+            return res.status(400).json({
+                message: "Message must be a string of maximum 500 characters.",
+            });
+        }
+
+        // Find Service
+        const service = await services.findOne({
+            _id: new ObjectId(serviceId),
+        });
+
+        if (!service) {
+            return res.status(404).json({
+                message: "Service not found.",
+            });
+        }
+
+        // Check Service Status
+        if (service.status && service.status !== "active") {
+            return res.status(400).json({
+                message: "This service is currently unavailable.",
+            });
+        }
+
+        // Check Duplicate Active Appointment
+        const existingAppointment = await appointments.findOne({
+            appointmentDate,
+            timeSlot,
+            status: {
+                $in: ["pending", "confirmed"],
+            },
+        });
+
+        if (existingAppointment) {
+            return res.status(409).json({
+                message: "This time slot is already booked. Please choose another time.",
+            });
+        }
+
+        // Create Appointment
+        const newAppointment = {
+            serviceId: new ObjectId(serviceId),
+
+            // Temporary until Authentication is implemented
+            customerId: null,
+
+            appointmentDate,
+            timeSlot,
+            message: message?.trim() || "",
+
+            servicePrice: service.price,
+
+            paymentStatus: "unpaid",
+            status: "pending",
+
+            createdAt: new Date(),
+        };
+
+        const result = await appointments.insertOne(newAppointment);
+
+        res.status(201).json({
+            message: "Appointment request submitted successfully!",
+            appointmentId: result.insertedId,
+        });
+
+    } catch (error) {
+        console.error("Create Appointment Error:", error);
+
+        res.status(500).json({
+            message: "Failed to create appointment.",
+        });
+    }
+});
+
+// Get All Appointments (Temporary Development Route)
+app.get("/appointments", async (req, res) => {
+    try {
+        const result = await appointments
+            .aggregate([
+                {
+                    $lookup: {
+                        from: "services",
+                        localField: "serviceId",
+                        foreignField: "_id",
+                        as: "service",
+                    },
+                },
+                {
+                    $unwind: {
+                        path: "$service",
+                        preserveNullAndEmptyArrays: true,
+                    },
+                },
+                {
+                    $sort: {
+                        createdAt: -1,
+                    },
+                },
+            ])
+            .toArray();
+
+        res.status(200).json(result);
+
+    } catch (error) {
+        console.error("Get Appointments Error:", error);
+
+        res.status(500).json({
+            message: "Failed to get appointments.",
         });
     }
 });
