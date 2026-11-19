@@ -444,139 +444,6 @@
 
 
 
-
-// import express from "express";
-// import { MongoClient } from "mongodb";
-// import "dotenv/config";
-// import cors from "cors";
-
-// const app = express();
-
-// app.use(express.json());
-// app.use(cors());
-
-// const port = 5000;
-
-// const client = new MongoClient(process.env.MONGODB_URI);
-
-// async function connectToMongoDB() {
-//     try {
-//         await client.connect();
-
-//         console.log("You successfully connected to MongoDB!");
-
-//         return client;
-//     } catch (error) {
-//         console.error("MongoDB Connection Error:", error);
-//         process.exit(1);
-//     }
-// }
-
-// const mongoclient = await connectToMongoDB();
-
-// const db = mongoclient.db("saloonbook");
-
-// // Collections
-// const users = db.collection("user");
-// const services = db.collection("services");
-
-// // Home Route
-// app.get("/", (req, res) => {
-//     res.send("SalonBook Server is Running!");
-// });
-
-// // Get All Users
-// app.get("/users", async (req, res) => {
-//     try {
-//         const result = await users.find({}).toArray();
-
-//         res.status(200).json(result);
-//     } catch (error) {
-//         console.error("Get Users Error:", error);
-
-//         res.status(500).json({
-//             message: "Failed to get users",
-//         });
-//     }
-// });
-
-// // Get All Services
-// app.get("/services", async (req, res) => {
-//     try {
-//         const result = await services.find({}).toArray();
-
-//         res.status(200).json(result);
-//     } catch (error) {
-//         console.error("Get Services Error:", error);
-
-//         res.status(500).json({
-//             message: "Failed to get services",
-//         });
-//     }
-// });
-
-// // Add New Service
-// app.post("/services", async (req, res) => {
-//     try {
-//         const {
-//             name,
-//             description,
-//             category,
-//             price,
-//             duration,
-//             image,
-//         } = req.body;
-
-//         // Validate Required Fields
-//         if (
-//             !name ||
-//             !description ||
-//             !category ||
-//             price === undefined ||
-//             duration === undefined
-//         ) {
-//             return res.status(400).json({
-//                 message: "Please provide all required service information.",
-//             });
-//         }
-
-//         const newService = {
-//             name,
-//             description,
-//             category,
-//             price: Number(price),
-//             duration: Number(duration),
-//             image: image || "",
-//             createdAt: new Date(),
-//             updatedAt: new Date(),
-//         };
-
-//         const result = await services.insertOne(newService);
-
-//         res.status(201).json({
-//             message: "Service added successfully!",
-//             insertedId: result.insertedId,
-//         });
-
-//     } catch (error) {
-//         console.error("Add Service Error:", error);
-
-//         res.status(500).json({
-//             message: "Failed to add service.",
-//         });
-//     }
-// });
-
-// // Start Server
-// app.listen(port, () => {
-//     console.log(`SalonBook server listening on port ${port}`);
-// });
-
-
-
-
-
-
 import express from "express";
 import { MongoClient, ObjectId } from "mongodb";
 import "dotenv/config";
@@ -632,7 +499,7 @@ app.get("/users", async (req, res) => {
     }
 });
 
-// Get All Services
+// Get All Services (Admin)
 app.get("/services", async (req, res) => {
     try {
         const result = await services.find({}).toArray();
@@ -647,6 +514,26 @@ app.get("/services", async (req, res) => {
     }
 });
 
+// Get Active Services (Public / Customer)
+app.get("/public/services", async (req, res) => {
+    try {
+        const result = await services.find({
+            $or: [
+                { status: "active" },
+                { status: { $exists: false } },
+            ],
+        }).toArray();
+
+        res.status(200).json(result);
+    } catch (error) {
+        console.error("Get Public Services Error:", error);
+
+        res.status(500).json({
+            message: "Failed to get active services",
+        });
+    }
+});
+
 // Add New Service
 app.post("/services", async (req, res) => {
     try {
@@ -657,6 +544,7 @@ app.post("/services", async (req, res) => {
             price,
             duration,
             image,
+            status,
         } = req.body;
 
         if (
@@ -671,6 +559,14 @@ app.post("/services", async (req, res) => {
             });
         }
 
+        const serviceStatus = status || "active";
+
+        if (!["active", "inactive"].includes(serviceStatus)) {
+            return res.status(400).json({
+                message: "Invalid service status.",
+            });
+        }
+
         const newService = {
             name: name.trim(),
             description: description.trim(),
@@ -678,6 +574,7 @@ app.post("/services", async (req, res) => {
             price: Number(price),
             duration: Number(duration),
             image: image || "",
+            status: serviceStatus,
             createdAt: new Date(),
             updatedAt: new Date(),
         };
@@ -721,6 +618,7 @@ app.put("/services/:id", async (req, res) => {
             price,
             duration,
             image,
+            status,
         } = req.body;
 
         if (!ObjectId.isValid(id)) {
@@ -764,6 +662,16 @@ app.put("/services/:id", async (req, res) => {
             updatedAt: new Date(),
         };
 
+        if (status !== undefined) {
+            if (!["active", "inactive"].includes(status)) {
+                return res.status(400).json({
+                    message: "Invalid service status.",
+                });
+            }
+
+            updatedService.status = status;
+        }
+
         if (image !== undefined) {
             updatedService.image = image;
         }
@@ -797,26 +705,22 @@ app.delete("/services/:id", async (req, res) => {
     try {
         const { id } = req.params;
 
-        // Step 1: Validate MongoDB ID
         if (!ObjectId.isValid(id)) {
             return res.status(400).json({
                 message: "Invalid service ID.",
             });
         }
 
-        // Step 2: Delete Service from MongoDB
         const result = await services.deleteOne({
             _id: new ObjectId(id),
         });
 
-        // Step 3: Check if Service Exists
         if (result.deletedCount === 0) {
             return res.status(404).json({
                 message: "Service not found.",
             });
         }
 
-        // Step 4: Send Success Response
         res.status(200).json({
             message: "Service deleted successfully!",
         });
