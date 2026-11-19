@@ -508,6 +508,94 @@ app.get("/users", async (req, res) => {
     }
 });
 
+
+
+// Get All Customers (Admin)
+app.get("/admin/users", async (req, res) => {
+    try {
+        const customerList = await users
+            .find({ role: { $ne: "admin" } })
+            .sort({ createdAt: -1 })
+            .toArray();
+
+        res.status(200).json(customerList);
+
+    } catch (error) {
+        console.error("Get Customers Error:", error);
+
+        res.status(500).json({
+            message: "Failed to fetch customers.",
+        });
+    }
+});
+
+
+// Block / Unblock Customer
+app.patch("/admin/users/:id/status", async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { isBlocked } = req.body;
+
+        // Validate User ID
+        if (!ObjectId.isValid(id)) {
+            return res.status(400).json({
+                message: "Invalid user ID.",
+            });
+        }
+
+        // Validate Block Status
+        if (typeof isBlocked !== "boolean") {
+            return res.status(400).json({
+                message: "Please provide a valid block status.",
+            });
+        }
+
+        // Find Customer
+        const customer = await users.findOne({
+            _id: new ObjectId(id),
+        });
+
+        if (!customer) {
+            return res.status(404).json({
+                message: "Customer not found.",
+            });
+        }
+
+        // Prevent Admin Blocking
+        if (customer.role === "admin") {
+            return res.status(403).json({
+                message: "Admin accounts cannot be blocked here.",
+            });
+        }
+
+        // Update Block Status
+        await users.updateOne(
+            { _id: new ObjectId(id) },
+            {
+                $set: {
+                    isBlocked,
+                    updatedAt: new Date(),
+                },
+            }
+        );
+
+        res.status(200).json({
+            message: isBlocked
+                ? "Customer blocked successfully!"
+                : "Customer unblocked successfully!",
+            isBlocked,
+        });
+
+    } catch (error) {
+        console.error("Update Customer Status Error:", error);
+
+        res.status(500).json({
+            message: "Failed to update customer status.",
+        });
+    }
+});
+
+
 // Get All Services (Admin)
 app.get("/services", async (req, res) => {
     try {
@@ -810,30 +898,30 @@ app.post("/appointments", async (req, res) => {
             });
         }
 
-      // Check Real Calendar Date
-const [year, month, day] = appointmentDate.split("-").map(Number);
+        // Check Real Calendar Date
+        const [year, month, day] = appointmentDate.split("-").map(Number);
 
-const selectedDate = new Date(year, month - 1, day);
+        const selectedDate = new Date(year, month - 1, day);
 
-if (
-    selectedDate.getFullYear() !== year ||
-    selectedDate.getMonth() !== month - 1 ||
-    selectedDate.getDate() !== day
-) {
-    return res.status(400).json({
-        message: "Invalid calendar date.",
-    });
-}
+        if (
+            selectedDate.getFullYear() !== year ||
+            selectedDate.getMonth() !== month - 1 ||
+            selectedDate.getDate() !== day
+        ) {
+            return res.status(400).json({
+                message: "Invalid calendar date.",
+            });
+        }
 
-// Check Past Date
-const today = new Date();
-today.setHours(0, 0, 0, 0);
+        // Check Past Date
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
 
-if (selectedDate < today) {
-    return res.status(400).json({
-        message: "You cannot book an appointment in the past.",
-    });
-}
+        if (selectedDate < today) {
+            return res.status(400).json({
+                message: "You cannot book an appointment in the past.",
+            });
+        }
 
         // Validate Time Slot
         if (!timeSlots.includes(timeSlot)) {
@@ -957,6 +1045,76 @@ app.get("/appointments", async (req, res) => {
         });
     }
 });
+
+
+
+
+// Update Appointment Status
+app.patch("/appointments/:id/status", async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status } = req.body;
+
+        // Validate Appointment ID
+        if (!ObjectId.isValid(id)) {
+            return res.status(400).json({
+                message: "Invalid appointment ID.",
+            });
+        }
+
+        // Validate Status
+        if (!["confirmed", "cancelled"].includes(status)) {
+            return res.status(400).json({
+                message: "Invalid appointment status.",
+            });
+        }
+
+        // Find Appointment
+        const appointment = await appointments.findOne({
+            _id: new ObjectId(id),
+        });
+
+        if (!appointment) {
+            return res.status(404).json({
+                message: "Appointment not found.",
+            });
+        }
+
+        // Check Allowed Status Changes
+        if (
+            appointment.status === "cancelled" ||
+            (appointment.status === "confirmed" && status === "confirmed")
+        ) {
+            return res.status(400).json({
+                message: "This appointment status cannot be changed.",
+            });
+        }
+
+        // Update Status
+        await appointments.updateOne(
+            { _id: new ObjectId(id) },
+            {
+                $set: {
+                    status,
+                    updatedAt: new Date(),
+                },
+            }
+        );
+
+        res.status(200).json({
+            message: `Appointment ${status} successfully!`,
+        });
+
+    } catch (error) {
+        console.error("Update Appointment Status Error:", error);
+
+        res.status(500).json({
+            message: "Failed to update appointment status.",
+        });
+    }
+});
+
+
 
 // Start Server
 app.listen(port, () => {
