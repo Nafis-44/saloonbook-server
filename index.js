@@ -1271,6 +1271,79 @@ app.get("/customer/appointments/:customerId", async (req, res) => {
 });
 
 
+
+// ========================================
+// CUSTOMER CANCEL APPOINTMENT API
+// ========================================
+
+app.patch("/customer/appointments/:id/cancel", async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { customerId } = req.body;
+
+        // Validate Appointment ID
+        if (!ObjectId.isValid(id)) {
+            return res.status(400).json({
+                message: "Invalid appointment ID.",
+            });
+        }
+
+        // Validate Customer ID
+        if (!customerId || !ObjectId.isValid(customerId)) {
+            return res.status(400).json({
+                message: "Invalid customer ID.",
+            });
+        }
+
+        // Find Appointment Belonging to This Customer
+        const appointment = await appointments.findOne({
+            _id: new ObjectId(id),
+            customerId: new ObjectId(customerId),
+        });
+
+        if (!appointment) {
+            return res.status(404).json({
+                message: "Appointment not found.",
+            });
+        }
+
+        // Only Pending Appointments Can Be Cancelled
+        if (appointment.status !== "pending") {
+            return res.status(400).json({
+                message: "Only pending appointments can be cancelled.",
+            });
+        }
+
+        // Update Appointment Status
+        await appointments.updateOne(
+            {
+                _id: new ObjectId(id),
+                customerId: new ObjectId(customerId),
+                status: "pending",
+            },
+            {
+                $set: {
+                    status: "cancelled",
+                    updatedAt: new Date(),
+                },
+            }
+        );
+
+        res.status(200).json({
+            success: true,
+            message: "Appointment cancelled successfully!",
+        });
+
+    } catch (error) {
+        console.error("Customer Cancel Appointment Error:", error);
+
+        res.status(500).json({
+            message: "Failed to cancel appointment.",
+        });
+    }
+});
+
+
 // Update Appointment Status
 app.patch("/appointments/:id/status", async (req, res) => {
     try {
