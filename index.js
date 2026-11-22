@@ -1408,3 +1408,4 @@ app.get("/customer/transactions/:customerId", verifytoken, async (req, res) => {
 app.listen(port, () => {
     console.log(`SalonBook server listening on port ${port}`);
 });
+export default app;
