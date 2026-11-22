@@ -37,6 +37,7 @@ const transactions = db.collection("transactions");
 
 
 const verifytoken = async (req, res, next) => {
+
     const authHeader = req.headers.authorization;
 
     if (!authHeader) {
@@ -248,18 +249,18 @@ app.get("/", (req, res) => {
 // USER APIs
 // ========================================
 
-// Get All Users
-app.get("/users", async (req, res) => {
-    try {
-        const result = await users.find({}).toArray();
-        res.status(200).json(result);
-    } catch (error) {
-        console.error("Get Users Error:", error);
-        res.status(500).json({
-            message: "Failed to get users",
-        });
-    }
-});
+// // Get All Users
+// app.get("/users", async (req, res) => {
+//     try {
+//         const result = await users.find({}).toArray();
+//         res.status(200).json(result);
+//     } catch (error) {
+//         console.error("Get Users Error:", error);
+//         res.status(500).json({
+//             message: "Failed to get users",
+//         });
+//     }
+// });
 
 // Get All Customers (Admin)
 app.get("/admin/users", verifytoken, verifyAdmin, async (req, res) => {
@@ -677,7 +678,7 @@ app.put("/services/:id", verifytoken, verifyAdmin, async (req, res) => {
 });
 
 // Delete Service
-app.delete("/services/:id", verifytoken,verifyAdmin,async (req, res) => {
+app.delete("/services/:id", verifytoken, verifyAdmin, async (req, res) => {
     try {
         const { id } = req.params;
 
@@ -713,11 +714,27 @@ app.delete("/services/:id", verifytoken,verifyAdmin,async (req, res) => {
 // ========================================
 
 // Create New Appointment
-app.post("/appointments",verifytoken, async (req, res) => {
+
+app.post("/appointments", verifytoken, async (req, res) => {
     try {
+        // Only Customer can book appointments
+        if (req.user?.role !== "customer") {
+            return res.status(403).json({
+                message: "Only customers can book appointments.",
+            });
+        }
+
+        // Get Customer ID from verified JWT token
+        const customerId = req.user.sub;
+
+        if (!ObjectId.isValid(customerId)) {
+            return res.status(400).json({
+                message: "Invalid customer ID.",
+            });
+        }
+
         const {
             serviceId,
-            customerId,
             appointmentDate,
             timeSlot,
             message,
@@ -732,12 +749,6 @@ app.post("/appointments",verifytoken, async (req, res) => {
         if (!ObjectId.isValid(serviceId)) {
             return res.status(400).json({
                 message: "Invalid service ID.",
-            });
-        }
-
-        if (customerId && !ObjectId.isValid(customerId)) {
-            return res.status(400).json({
-                message: "Invalid customer ID.",
             });
         }
 
@@ -816,9 +827,7 @@ app.post("/appointments",verifytoken, async (req, res) => {
 
         const newAppointment = {
             serviceId: new ObjectId(serviceId),
-            customerId: customerId
-                ? new ObjectId(customerId)
-                : null,
+            customerId: new ObjectId(customerId),
             appointmentDate,
             timeSlot,
             message: message?.trim() || "",
@@ -835,16 +844,19 @@ app.post("/appointments",verifytoken, async (req, res) => {
             message: "Appointment created successfully!",
             insertedId: result.insertedId,
         });
+
     } catch (error) {
         console.error("Create Appointment Error:", error);
+
         res.status(500).json({
             message: "Failed to create appointment.",
         });
     }
 });
 
+
 // Get All Appointments (Temporary Development Route)
-app.get("/appointments", async (req, res) => {
+app.get("/appointments", verifytoken, verifyAdmin, async (req, res) => {
     try {
         const result = await appointments.aggregate([
             {
@@ -892,13 +904,24 @@ app.get("/appointments", async (req, res) => {
 // ========================================
 
 // Get Appointments of a Specific Customer
-app.get("/customer/appointments/:customerId",verifytoken, async (req, res) => {
+app.get("/customer/appointments/:customerId", verifytoken, async (req, res) => {
     try {
         const { customerId } = req.params;
 
         if (!ObjectId.isValid(customerId)) {
             return res.status(400).json({
                 message: "Invalid customer ID.",
+            });
+        }
+        if (req.user?.role !== "customer") {
+            return res.status(403).json({
+                message: "Forbidden! Customer access required.",
+            });
+        }
+
+        if (req.user?.sub !== customerId) {
+            return res.status(403).json({
+                message: "You can only view your own appointments.",
             });
         }
 
@@ -958,10 +981,20 @@ app.get("/customer/appointments/:customerId",verifytoken, async (req, res) => {
 // CUSTOMER CANCEL APPOINTMENT API
 // ========================================
 
-app.patch("/customer/appointments/:id/cancel",verifytoken, async (req, res) => {
+
+app.patch("/customer/appointments/:id/cancel", verifytoken, async (req, res) => {
     try {
         const { id } = req.params;
-        const { customerId } = req.body;
+
+        // Only Customer can cancel appointments
+        if (req.user?.role !== "customer") {
+            return res.status(403).json({
+                message: "Only customers can cancel appointments.",
+            });
+        }
+
+        // Get Customer ID from verified JWT token
+        const customerId = req.user.sub;
 
         if (!ObjectId.isValid(id)) {
             return res.status(400).json({
@@ -969,7 +1002,7 @@ app.patch("/customer/appointments/:id/cancel",verifytoken, async (req, res) => {
             });
         }
 
-        if (!customerId || !ObjectId.isValid(customerId)) {
+        if (!ObjectId.isValid(customerId)) {
             return res.status(400).json({
                 message: "Invalid customer ID.",
             });
@@ -1010,8 +1043,10 @@ app.patch("/customer/appointments/:id/cancel",verifytoken, async (req, res) => {
             success: true,
             message: "Appointment cancelled successfully!",
         });
+
     } catch (error) {
         console.error("Customer Cancel Appointment Error:", error);
+
         res.status(500).json({
             message: "Failed to cancel appointment.",
         });
@@ -1022,7 +1057,7 @@ app.patch("/customer/appointments/:id/cancel",verifytoken, async (req, res) => {
 // ADMIN UPDATE APPOINTMENT STATUS
 // ========================================
 
-app.patch("/appointments/:id/status", async (req, res) => {
+app.patch("/appointments/:id/status", verifytoken, verifyAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const { status } = req.body;
@@ -1079,13 +1114,24 @@ app.patch("/appointments/:id/status", async (req, res) => {
     }
 });
 
+
 // ========================================
 // STRIPE CHECKOUT SESSION API
 // ========================================
 
-app.post("/create-checkout-session",verifytoken, async (req, res) => {
+app.post("/create-checkout-session", verifytoken, async (req, res) => {
     try {
-        const { appointmentId, customerId } = req.body;
+        // Only Customer can create checkout session
+        if (req.user?.role !== "customer") {
+            return res.status(403).json({
+                message: "Only customers can make payments.",
+            });
+        }
+
+        const { appointmentId } = req.body;
+
+        // Get customer ID from verified JWT
+        const customerId = req.user.sub;
 
         if (
             !appointmentId ||
@@ -1098,6 +1144,7 @@ app.post("/create-checkout-session",verifytoken, async (req, res) => {
             });
         }
 
+        // Find only this customer's appointment
         const appointment = await appointments.findOne({
             _id: new ObjectId(appointmentId),
             customerId: new ObjectId(customerId),
@@ -1109,12 +1156,14 @@ app.post("/create-checkout-session",verifytoken, async (req, res) => {
             });
         }
 
+        // Only confirmed appointments can be paid
         if (appointment.status !== "confirmed") {
             return res.status(400).json({
                 message: "Only confirmed appointments can be paid.",
             });
         }
 
+        // Prevent duplicate payment
         if (appointment.paymentStatus === "paid") {
             return res.status(400).json({
                 message: "This appointment has already been paid.",
@@ -1207,13 +1256,23 @@ app.post("/create-checkout-session",verifytoken, async (req, res) => {
 
 
 
+
 // ========================================
 // VERIFY PAYMENT FOR SUCCESS PAGE
 // ========================================
 
-app.get("/payment/verify/:sessionId",verifytoken, async (req, res) => {
+app.get("/payment/verify/:sessionId", verifytoken, async (req, res) => {
     try {
+        // Only Customer can verify their payment
+        if (req.user?.role !== "customer") {
+            return res.status(403).json({
+                success: false,
+                message: "Forbidden! Customer access required.",
+            });
+        }
+
         const { sessionId } = req.params;
+        const customerId = req.user.sub;
 
         if (!sessionId || !sessionId.startsWith("cs_")) {
             return res.status(400).json({
@@ -1236,6 +1295,17 @@ app.get("/payment/verify/:sessionId",verifytoken, async (req, res) => {
             });
         }
 
+        // Check transaction ownership
+        if (
+            !transaction.customerId ||
+            String(transaction.customerId) !== String(customerId)
+        ) {
+            return res.status(403).json({
+                success: false,
+                message: "You are not allowed to view this payment.",
+            });
+        }
+
         // Find the related appointment
         const appointment = await appointments.findOne({
             _id: transaction.appointmentId,
@@ -1247,6 +1317,14 @@ app.get("/payment/verify/:sessionId",verifytoken, async (req, res) => {
             return res.status(404).json({
                 success: false,
                 message: "Verified appointment not found.",
+            });
+        }
+
+        // Check appointment ownership
+        if (String(appointment.customerId) !== String(customerId)) {
+            return res.status(403).json({
+                success: false,
+                message: "You are not allowed to view this appointment.",
             });
         }
 
@@ -1283,13 +1361,11 @@ app.get("/payment/verify/:sessionId",verifytoken, async (req, res) => {
 
 
 
-
-
 // ========================================
 // CUSTOMER PAYMENT HISTORY API
 // ========================================
 
-app.get("/customer/transactions/:customerId",verifytoken, async (req, res) => {
+app.get("/customer/transactions/:customerId", verifytoken, async (req, res) => {
     try {
         const { customerId } = req.params;
 
