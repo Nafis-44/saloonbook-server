@@ -184,9 +184,7 @@ app.post(
                         stripeSessionId: session.id,
                     },
                     {
-                        $setOnInsert: {
-                            stripeEventId: event.id,
-                            stripeSessionId: session.id,
+                        $set: {
                             stripePaymentIntentId: paymentIntentId,
                             appointmentId: new ObjectId(appointmentId),
                             customerId:
@@ -196,6 +194,11 @@ app.post(
                             amountTotal: session.amount_total,
                             currency: session.currency,
                             paymentStatus: "paid",
+                            updatedAt: new Date(),
+                        },
+                        $setOnInsert: {
+                            stripeEventId: event.id,
+                            stripeSessionId: session.id,
                             createdAt: new Date(),
                         },
                     },
