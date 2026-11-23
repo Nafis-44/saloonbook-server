@@ -1,3 +1,5 @@
+import dns from 'node:dns';
+dns.setServers(['8.8.8.8', '8.8.4.4']);
 import express from "express";
 import { MongoClient, ObjectId } from "mongodb";
 import "dotenv/config";
@@ -1122,35 +1124,18 @@ app.patch("/appointments/:id/status", verifytoken, verifyAdmin, async (req, res)
 // STRIPE CHECKOUT SESSION API
 // ========================================
 
-app.post("/create-checkout-session", verifytoken, async (req, res) => {
+app.post("/create-checkout-session", async (req, res) => {
     try {
-        // Only Customer can create checkout session
-        if (req.user?.role !== "customer") {
-            return res.status(403).json({
-                message: "Only customers can make payments.",
-            });
-        }
-
         const { appointmentId } = req.body;
 
-        // Get customer ID from verified JWT
-        const customerId = req.user.sub;
-
-        if (
-            !appointmentId ||
-            !customerId ||
-            !ObjectId.isValid(appointmentId) ||
-            !ObjectId.isValid(customerId)
-        ) {
+        if (!appointmentId || !ObjectId.isValid(appointmentId)) {
             return res.status(400).json({
-                message: "Invalid appointment or customer ID.",
+                message: "Invalid appointment ID.",
             });
         }
 
-        // Find only this customer's appointment
         const appointment = await appointments.findOne({
             _id: new ObjectId(appointmentId),
-            customerId: new ObjectId(customerId),
         });
 
         if (!appointment) {
@@ -1192,7 +1177,7 @@ app.post("/create-checkout-session", verifytoken, async (req, res) => {
         }
 
         const customer = await users.findOne({
-            _id: new ObjectId(customerId),
+            _id: appointment.customerId,
         });
 
         const checkoutSession = await stripe.checkout.sessions.create({
@@ -1218,7 +1203,7 @@ app.post("/create-checkout-session", verifytoken, async (req, res) => {
 
             metadata: {
                 appointmentId: appointmentId,
-                customerId: customerId,
+                customerId: appointment.customerId?.toString() || "",
                 serviceId: appointment.serviceId.toString(),
             },
 
@@ -1230,7 +1215,6 @@ app.post("/create-checkout-session", verifytoken, async (req, res) => {
         await appointments.updateOne(
             {
                 _id: new ObjectId(appointmentId),
-                customerId: new ObjectId(customerId),
             },
             {
                 $set: {
@@ -1264,18 +1248,9 @@ app.post("/create-checkout-session", verifytoken, async (req, res) => {
 // VERIFY PAYMENT FOR SUCCESS PAGE
 // ========================================
 
-app.get("/payment/verify/:sessionId", verifytoken, async (req, res) => {
+app.get("/payment/verify/:sessionId", async (req, res) => {
     try {
-        // Only Customer can verify their payment
-        if (req.user?.role !== "customer") {
-            return res.status(403).json({
-                success: false,
-                message: "Forbidden! Customer access required.",
-            });
-        }
-
         const { sessionId } = req.params;
-        const customerId = req.user.sub;
 
         if (!sessionId || !sessionId.startsWith("cs_")) {
             return res.status(400).json({
@@ -1298,17 +1273,6 @@ app.get("/payment/verify/:sessionId", verifytoken, async (req, res) => {
             });
         }
 
-        // Check transaction ownership
-        if (
-            !transaction.customerId ||
-            String(transaction.customerId) !== String(customerId)
-        ) {
-            return res.status(403).json({
-                success: false,
-                message: "You are not allowed to view this payment.",
-            });
-        }
-
         // Find the related appointment
         const appointment = await appointments.findOne({
             _id: transaction.appointmentId,
@@ -1320,14 +1284,6 @@ app.get("/payment/verify/:sessionId", verifytoken, async (req, res) => {
             return res.status(404).json({
                 success: false,
                 message: "Verified appointment not found.",
-            });
-        }
-
-        // Check appointment ownership
-        if (String(appointment.customerId) !== String(customerId)) {
-            return res.status(403).json({
-                success: false,
-                message: "You are not allowed to view this appointment.",
             });
         }
 
@@ -1399,6 +1355,104 @@ app.get("/customer/transactions/:customerId", verifytoken, async (req, res) => {
         });
     }
 });
+
+
+
+// ========================================
+// ADMIN TRANSACTIONS API
+// ========================================
+
+app.get(
+    "/admin/transactions",
+    verifytoken,
+    verifyAdmin,
+    async (req, res) => {
+        try {
+            const result = await transactions.aggregate([
+                {
+                    $sort: {
+                        createdAt: -1,
+                    },
+                },
+                {
+                    $lookup: {
+                        from: "user",
+                        localField: "customerId",
+                        foreignField: "_id",
+                        as: "customer",
+                    },
+                },
+                {
+                    $unwind: {
+                        path: "$customer",
+                        preserveNullAndEmptyArrays: true,
+                    },
+                },
+                {
+                    $lookup: {
+                        from: "appointments",
+                        localField: "appointmentId",
+                        foreignField: "_id",
+                        as: "appointment",
+                    },
+                },
+                {
+                    $unwind: {
+                        path: "$appointment",
+                        preserveNullAndEmptyArrays: true,
+                    },
+                },
+                {
+                    $lookup: {
+                        from: "services",
+                        localField: "appointment.serviceId",
+                        foreignField: "_id",
+                        as: "service",
+                    },
+                },
+                {
+                    $unwind: {
+                        path: "$service",
+                        preserveNullAndEmptyArrays: true,
+                    },
+                },
+                {
+                    $project: {
+                        _id: 1,
+                        stripeSessionId: 1,
+                        stripePaymentIntentId: 1,
+                        appointmentId: 1,
+                        customerId: 1,
+                        amountTotal: 1,
+                        currency: 1,
+                        paymentStatus: 1,
+                        createdAt: 1,
+                        customerName: "$customer.name",
+                        customerEmail: "$customer.email",
+                        serviceName: "$service.name",
+                        appointmentDate: "$appointment.appointmentDate",
+                        timeSlot: "$appointment.timeSlot",
+                    },
+                },
+            ]).toArray();
+
+            res.status(200).json({
+                success: true,
+                totalTransactions: result.length,
+                transactions: result,
+            });
+
+        } catch (error) {
+            console.error("Get Admin Transactions Error:", error);
+
+            res.status(500).json({
+                success: false,
+                message: "Failed to fetch transactions.",
+            });
+        }
+    }
+);
+
 
 
 // ========================================
